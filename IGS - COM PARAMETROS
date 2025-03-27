@@ -1,0 +1,157 @@
+' Obter o documento de desenho ativo
+Dim oDoc As DrawingDocument = ThisApplication.ActiveDocument
+
+' Verificar se o documento é um desenho
+If oDoc.DocumentType <> DocumentTypeEnum.kDrawingDocumentObject Then
+    MessageBox.Show("Este não é um documento de desenho.")
+    Return
+End If
+
+' Exibir uma caixa de entrada para o prefixo do nome do arquivo
+Dim prefixo As String = InputBox("Insira o prefixo para o nome do arquivo IGES:", "Inserir Prefixo")
+
+' Verificar se o prefixo não está vazio
+If String.IsNullOrEmpty(prefixo) Then
+    MessageBox.Show("Prefixo inválido. A exportação não será realizada.")
+    Return
+End If
+
+' Caminho do diretório onde os arquivos IGES serão salvos
+Dim outputFolder As String = "C:\Users\PC\Desktop\Nova pasta" ' Altere para o diretório desejado
+
+' Verificar se o diretório existe
+If Not System.IO.Directory.Exists(outputFolder) Then
+    ' Criar o diretório caso não exista
+    System.IO.Directory.CreateDirectory(outputFolder)
+End If
+
+' Obter o Add-In do tradutor IGES
+Dim oIGESTranslator As TranslatorAddIn = ThisApplication.ApplicationAddIns.ItemById("{90AF7F44-0C01-11D5-8E83-0010B541CD80}")
+
+' Verificar se o tradutor IGES foi acessado corretamente
+If oIGESTranslator Is Nothing Then
+    MessageBox.Show("Não foi possível acessar o tradutor IGES.")
+    Return
+End If
+
+' Criar um contexto de tradução para o arquivo IGES
+Dim oContext As TranslationContext = ThisApplication.TransientObjects.CreateTranslationContext
+
+' Criar um mapa de opções para a tradução
+Dim oOptions As NameValueMap = ThisApplication.TransientObjects.CreateNameValueMap
+
+' Verificar se há opções para salvar uma cópia do arquivo IGES
+If oIGESTranslator.HasSaveCopyAsOptions(ThisApplication.ActiveDocument, oContext, oOptions) Then
+    ' Configurar o tipo de geometria para o wireframe (modelo de linhas e vértices)
+    ' 0 = Superfícies, 1 = Sólidos, 2 = Wireframe (Modelo de linhas e vértices)
+    oOptions.Value("GeometryType") = 0  ' Definir o tipo de geometria como superfícies
+
+    ' Configurar o tipo de face do sólido
+    oOptions.Value("SolidFaceType") = 0  ' 0 = NURBS (Curvas e superfícies), 1 = Analítico (Geometria analítica)
+
+    ' Configurar o tipo de superfície
+    oOptions.Value("SurfaceType") = 1  ' 0 = 143(Bounded), 1 = 144(Trimmed)
+
+    ' Definir o tipo de mecanismo de I/O (entrada e saída de arquivos)
+    oContext.Type = IOMechanismEnum.kFileBrowseIOMechanism
+
+    ' Criar um objeto para armazenar os dados de saída
+    Dim oData As DataMedium = ThisApplication.TransientObjects.CreateDataMedium
+End If
+
+' Iterar sobre todas as folhas do desenho
+For Each drawSheet As Sheet In oDoc.Sheets
+    ' Iterar sobre todas as vistas de desenho nas folhas
+    For Each drawingView As DrawingView In drawSheet.DrawingViews
+        ' Verificar se o DrawingView tem um documento de modelo associado
+        If DrawingView.ReferencedDocumentDescriptor IsNot Nothing Then
+            Dim oModel As Document = DrawingView.ReferencedDocumentDescriptor.ReferencedDocument
+            If oModel IsNot Nothing Then
+                ' Verificar se o modelo é uma peça (IPT) e foi criado com o Frame Generator
+                If oModel.DocumentType = DocumentTypeEnum.kPartDocumentObject AndAlso _
+                   oModel.DocumentInterests.HasInterest("{AC211AE0-A7A5-4589-916D-81C529DA6D17}") Then
+                    ' A peça foi criada com o Frame Generator
+                    MessageBox.Show("A peça " & oModel.DisplayName & " foi criada com o Frame Generator." & vbCrLf & _
+                                     "Nome da folha: " & drawSheet.Name)
+
+                    ' Captura o número da página da folha e formata como 3 dígitos
+                    Dim sheetName As String = drawSheet.Name
+                    Dim pageNumber As String = sheetName.Substring(sheetName.LastIndexOf(":") + 1)
+
+                    ' Verificar se o número da página é menor que 100 para aplicar o formato de 3 dígitos
+                    Dim formattedPageNumber As String
+                    If Integer.TryParse(pageNumber, 0) Then
+                        If Convert.ToInt32(pageNumber) < 100 Then
+                            formattedPageNumber = pageNumber.PadLeft(3, "0"c) ' Formatar com 3 dígitos, por exemplo: 001
+                        Else
+                            formattedPageNumber = pageNumber ' Manter como está se for 100 ou maior
+                        End If
+                    Else
+                        formattedPageNumber = "000" ' Caso o número da página seja inválido
+                    End If
+
+                    ' Acessar e formatar a quantidade personalizada
+                    Dim qtdePersonalizada As String = ""
+                    Try
+                        qtdePersonalizada = oModel.PropertySets.Item("User Defined Properties").Item("QTDE PERSONALIZADA").Value.ToString()
+                    Catch ex As Exception
+                        MessageBox.Show("Erro ao acessar a propriedade personalizada 'QTDE PERSONALIZADA': " & ex.Message)
+                        Return
+                    End Try
+
+                    ' Formatar a quantidade com o sufixo "X" e garantir que tenha 3 dígitos
+                    Dim formattedQtde As String = qtdePersonalizada.PadLeft(3, "0"c) & "X"
+
+                    ' Agora, obter as dimensões diretamente da descrição da peça
+                    Dim descricao As String = oModel.PropertySets.Item("User Defined Properties").Item("DESCRICAO").Value.ToString()
+
+                    ' Variáveis para armazenar as dimensões
+                    Dim dimensao1 As String = ""
+                    Dim dimensao2 As String = ""
+                    Dim dimensao3 As String = ""
+
+                    ' Usar uma expressão regular para capturar as dimensões na descrição da peça
+                    ' A expressão regular considera formatos como: "40x40x2.9", "100 x 50 x 2", "50x30x3,5", etc.
+                    Dim regex As New System.Text.RegularExpressions.Regex("(\d+(\.\d+)?)\s*[xX]\s*(\d+(\.\d+)?)\s*[xX]\s*(\d+(\.\d+)?)")
+
+                    ' Verificar se a descrição corresponde ao padrão da expressão regular
+                    Dim match As System.Text.RegularExpressions.Match = regex.Match(descricao)
+
+                    If match.Success Then
+                        ' Extrair as dimensões da descrição
+                        dimensao1 = match.Groups(1).Value  ' Primeira dimensão (largura ou altura)
+                        dimensao2 = match.Groups(3).Value  ' Segunda dimensão (profundidade ou altura)
+                        dimensao3 = match.Groups(5).Value  ' Terceira dimensão (espessura ou outra)
+
+                        ' Formatar as dimensões para o formato desejado
+                        Dim dimensoesFormatadas As String = dimensao1 & "x" & dimensao2 & "x" & dimensao3
+                    Else
+                        ' Caso não encontre dimensões no formato esperado, pode-se tratar com uma mensagem ou valor padrão
+                        MessageBox.Show("Não foi possível extrair as dimensões da descrição da peça.")
+                        Return
+                    End If
+
+                    ' Definir o nome do arquivo IGES
+                    Dim igesFileName As String = outputFolder & "\" & prefixo & "-" & formattedPageNumber & "-" & dimensao1 & "x" & dimensao2 & "x" & dimensao3 & "-" & formattedQtde & ".igs"
+                    MessageBox.Show("Nome do arquivo IGES: " & igesFileName)
+
+                    ' Realizar a exportação para IGES
+                    Dim oData As DataMedium = ThisApplication.TransientObjects.CreateDataMedium
+                    oData.FileName = igesFileName
+
+                    Try
+                        ' Tenta salvar o arquivo IGES com as opções definidas
+                        oIGESTranslator.SaveCopyAs(oModel, oContext, oOptions, oData)
+                        MessageBox.Show("Arquivo IGES exportado com sucesso: " & igesFileName)
+                    Catch ex As Exception
+                        MessageBox.Show("Erro ao exportar para IGES: " & ex.Message)
+                    End Try
+                ElseIf oModel.DocumentType = DocumentTypeEnum.kPartDocumentObject Then
+                    ' Caso a peça seja um IPT, mas não tenha sido criada com o Frame Generator
+                    MessageBox.Show("A peça " & oModel.DisplayName & " é um IPT, mas NÃO foi criada com o Frame Generator." & vbCrLf & _
+                                     "Nome da folha: " & drawSheet.Name)
+                End If
+            End If
+        End If
+    Next
+Next

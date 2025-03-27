@@ -1,0 +1,121 @@
+Sub Main()
+    ' Caminho do diretório onde os arquivos DXF serão exportados 
+    Dim SetTheFilePathHere As String = "C:\Users\Joahan\Desktop\Nova pasta (2)"
+    
+    ' Verificar se o diretório de destino existe, se não, criar
+    If Not System.IO.Directory.Exists(SetTheFilePathHere) Then
+        Try
+            System.IO.Directory.CreateDirectory(SetTheFilePathHere)
+            MessageBox.Show("O diretório foi criado com sucesso!", "Diretório Criado")
+        Catch ex As Exception
+            MessageBox.Show("Erro ao tentar criar o diretório: " & ex.Message, "Erro de Criação de Diretório")
+            Exit Sub
+        End Try
+    End If
+
+    ' Solicitar ao usuário que insira o prefixo para o nome do arquivo e o texto
+    Dim prefix As String = InputBox("Digite o prefixo para o arquivo DXF e o texto:", "Prefixo do DXF", "")
+
+    ' Se o prefixo estiver vazio, exibir mensagem e encerrar
+    If String.IsNullOrEmpty(prefix) Then
+        MessageBox.Show("Prefixo não informado. A exportação será cancelada.", "Erro de Prefixo")
+        Exit Sub
+    End If
+
+    ' Acessar o documento ativo (deve ser uma montagem)
+    Dim oDoc As AssemblyDocument = Nothing
+    If TypeOf ThisApplication.ActiveDocument Is AssemblyDocument Then
+        oDoc = CType(ThisApplication.ActiveDocument, AssemblyDocument)
+    Else
+        MessageBox.Show("O documento ativo não é uma montagem.", "Erro")
+        Exit Sub
+    End If
+
+    ' Obter a lista de componentes da montagem (BOM)
+    Dim oBOM As BOM = oDoc.ComponentDefinition.BOM
+    oBOM.StructuredViewEnabled = True
+    Dim oBOMView As BOMView = oBOM.BOMViews.Item(oBOM.BOMViews.Count)
+
+    ' Iterar sobre as linhas da lista de materiais (BOM)
+    For Each oRow As BOMRow In oBOMView.BOMRows
+        Dim iDoc As Document = Nothing
+        Dim partDoc As PartDocument = Nothing
+
+        Try
+            ' Acessar o componente de cada linha da BOM
+            Dim oCD As ComponentDefinition = oRow.ComponentDefinitions.Item(1)
+            iDoc = oCD.Document
+
+            ' Somente peças de chapa metálica
+            If iDoc.SubType <> "{9C464203-9BAE-11D3-8BAD-0060B0CE6BB4}" Then Continue For
+
+            ' Verificar se o modelo está salvo e acessar o documento
+            If TypeOf iDoc Is PartDocument Then
+                partDoc = CType(iDoc, PartDocument)
+                Dim iName As String = partDoc.FullFileName
+
+                If String.IsNullOrEmpty(iName) Then Continue For
+
+                ' Acessar o documento
+                iDoc = ThisApplication.Documents.Open(iName)
+                oCD = iDoc.ComponentDefinition
+
+                ' Perguntar ao usuário se deseja exportar esta peça
+                Dim result As MsgBoxResult = MessageBox.Show("Deseja exportar a peça " & partDoc.DisplayName & " para DXF?", "Exportar Peça", MessageBoxButtons.YesNo)
+
+                If result = MsgBoxResult.No Then
+                    iDoc.Close(True)
+                    Continue For
+                End If
+
+                ' Garantir que o plano de chapa seja desdobrado corretamente
+                If Not oCD.HasFlatPattern Then
+                    oCD.Unfold()
+                Else
+                    oCD.FlatPattern.Edit()
+                End If
+
+                ' Selecionar face para exportação
+                Dim selectedFace As Face = CType(ThisApplication.CommandManager.Pick(SelectionFilterEnum.kPartFaceFilter, "Selecione uma Face para Exportar como DXF"), Face)
+                If selectedFace Is Nothing Then
+                    MessageBox.Show("Nenhuma face selecionada. A exportação foi cancelada.", "Cancelado")
+                    Continue For
+                End If
+
+                ' Obter propriedades personalizadas
+                Dim oProperties As PropertySets = iDoc.PropertySets
+                Dim numeroPag As String = oProperties.Item("User Defined Properties").Item("Numero Pag").Value.ToString()
+                Dim totalQty As String = oProperties.Item("User Defined Properties").Item("QTDE PERSONALIZADA").Value.ToString()
+                Dim thickness As String = oProperties.Item("User Defined Properties").Item("Thickness").Value.ToString()
+
+                ' Substituir a vírgula por ponto na espessura
+                thickness = thickness.Replace(",", ".")
+
+                ' Gerar nome do arquivo DXF
+                Dim formattedSheetNumber As String = numeroPag.PadLeft(3, "0"c)
+                Dim formattedThickness As String = thickness.Replace(" mm", "")
+                Dim formattedTotalQty As String = totalQty.PadLeft(3, "0"c) & "X"
+
+                Dim SetTheFilenameHereFormatted As String = prefix & "-" & formattedSheetNumber & "-#" & formattedThickness & "-" & formattedTotalQty & ".dxf"
+                Dim fullFilePath As String = SetTheFilePathHere & "\" & SetTheFilenameHereFormatted
+
+                ' Exibir o caminho completo
+                MessageBox.Show("Caminho do arquivo DXF: " & fullFilePath)
+
+                ' Exportar DXF
+                iDoc.SelectSet.Select(selectedFace)
+                ThisApplication.CommandManager.PostPrivateEvent(kFileNameEvent, fullFilePath)
+                Dim oCtrlDef As ButtonDefinition = ThisApplication.CommandManager.ControlDefinitions.Item("GeomToDXFCommand")
+                oCtrlDef.Execute()
+
+                ' Fechar a peça após a exportação
+                iDoc.Close(True)
+            End If
+        Catch ex As Exception
+            MessageBox.Show("Erro ao processar a peça: " & ex.Message, "Erro de Processamento")
+        End Try
+    Next
+
+    ' Finalizar a execução
+    ThisApplication.StatusBarText = "Processo de desdobramento e exportação concluído."
+End Sub

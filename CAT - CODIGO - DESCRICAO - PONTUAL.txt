@@ -1,0 +1,89 @@
+Sub Main()
+    If TypeOf ThisDoc.Document Is DrawingDocument Then
+        Dim dwgDoc As DrawingDocument = ThisDoc.Document
+        Dim BOMStructure As Object
+        Dim refPageIndex As Integer
+        
+        ' Caixa de diálogo para inserir o número da página de referência
+        On Error Resume Next
+        refPageIndex = CInt(InputBox("Insira o número da página de referência a partir da qual o código será iniciado:", "Definir Página de Referência", 1))
+        On Error GoTo 0
+        
+        ' Verifica se o número da página é válido
+        If refPageIndex <= 0 Or refPageIndex > dwgDoc.Sheets.Count Then
+            MessageBox.Show("Número de página inválido. Por favor, insira um número de página válido.", "Erro", MessageBoxButtons.OK, MessageBoxIcon.Error)
+            Exit Sub
+        End If
+        
+        ' Iteração pelas folhas do desenho
+        Dim sheetCounter As Integer = 1
+        For Each dwgSheet As Sheet In dwgDoc.Sheets
+            ' Verifica se a folha atual é maior ou igual à página de referência
+            If sheetCounter >= refPageIndex Then
+                ' Obtém o nome do documento referenciado na folha escolhida
+                If dwgSheet.DrawingViews.Count > 0 Then
+                    FNamePos = InStrRev(dwgSheet.DrawingViews(1).ReferencedDocumentDescriptor.FullDocumentName, "\", -1)
+                    docFName = Mid(dwgSheet.DrawingViews(1).ReferencedDocumentDescriptor.FullDocumentName, FNamePos + 1, Len(dwgSheet.DrawingViews(1).ReferencedDocumentDescriptor.FullDocumentName) - FNamePos)
+                    
+                    ' Obtém as informações necessárias da folha de referência
+                    prtNumber = SanitizeText(iProperties.Value(docFName, "Project", "Description"))
+                    stockNumber = SanitizeText(iProperties.Value(docFName, "Project", "Part number"))
+                    
+                    ' Tenta obter a categoria personalizada
+                    On Error Resume Next
+                    categoria = iProperties.Value(docFName, "Custom", "Categoria")
+                    On Error GoTo 0
+                    If categoria = "" Then
+                        categoria = "N/A" ' Define um valor padrão caso a propriedade não exista
+                    End If
+                    
+                    ' Verifica e extrai a categoria se necessário
+                    If InStr(categoria, " - ") > 0 Then
+                        Dim parts() As String
+                        parts = Split(categoria, " - ")
+                        If UBound(parts) >= 1 Then
+                            categoria = parts(1)
+                        End If
+                    End If
+                    
+                    ' Limita o prtNumber a 20 caracteres
+                    If Len(prtNumber) > 25 Then
+                        prtNumber = Left(prtNumber, 20)
+                    End If
+                    
+                    ' Atualiza o nome da folha
+                    Dim newSheetName As String = categoria & " - " & stockNumber & " - " & prtNumber
+                    If IsAssemblyDocument(docFName) And Not newSheetName.EndsWith("ASS'Y") Then
+                        newSheetName = newSheetName & " ASS'Y"
+                    End If
+                    dwgSheet.Name = newSheetName
+                End If
+            End If
+            
+            sheetCounter += 1
+        Next
+    End If
+End Sub
+
+Function SanitizeText(inputText As String) As String
+    On Error GoTo HandleError
+    Dim sanitizedText As String
+    sanitizedText = inputText
+    Dim i As Integer
+    ' Substitui caracteres especiais por "."
+    For i = 1 To Len(sanitizedText)
+        If Not Mid(sanitizedText, i, 1) Like "[A-Za-z0-9 ]" Then
+            sanitizedText = Replace(sanitizedText, Mid(sanitizedText, i, 1), ".")
+        End If
+    Next i
+    SanitizeText = sanitizedText
+    Exit Function
+HandleError:
+    ' Retorna "X" em caso de erro
+    SanitizeText = "X"
+End Function
+
+Function IsAssemblyDocument(docName As String) As Boolean
+    Dim fileExtension As String = System.IO.Path.GetExtension(docName).ToUpper()
+    Return fileExtension = ".IAM"
+End Function

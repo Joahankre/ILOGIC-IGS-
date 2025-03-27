@@ -1,0 +1,40 @@
+' Obter o Add-In do tradutor IGES.
+Dim oIGESTranslator As TranslatorAddIn = ThisApplication.ApplicationAddIns.ItemById("{90AF7F44-0C01-11D5-8E83-0010B541CD80}")
+
+' Verificar se o tradutor IGES foi acessado corretamente.
+If oIGESTranslator Is Nothing Then
+    MsgBox("Não foi possível acessar o tradutor IGES.")  ' Exibe uma mensagem de erro caso o tradutor não seja encontrado.
+    Exit Sub  ' Interrompe a execução do código se o tradutor não for encontrado.
+End If
+
+' Criar um contexto de tradução para o arquivo IGES.
+Dim oContext As TranslationContext = ThisApplication.TransientObjects.CreateTranslationContext
+
+' Criar um mapa de opções para a tradução.
+Dim oOptions As NameValueMap = ThisApplication.TransientObjects.CreateNameValueMap
+
+' Verificar se há opções para salvar uma cópia do arquivo IGES.
+If oIGESTranslator.HasSaveCopyAsOptions(ThisApplication.ActiveDocument, oContext, oOptions) Then
+    ' Configurar o tipo de geometria para o wireframe (modelo de linhas e vértices).
+    ' 0 = Superfícies, 1 = Sólidos, 2 = Wireframe (Modelo de linhas e vértices)
+    oOptions.Value("GeometryType") = 0  ' Definir o tipo de geometria como sólidos.
+
+    ' Para configurar outros valores do tradutor, como o tipo de face do sólido:
+     oOptions.Value("SolidFaceType") = 0
+    ' 0 = NURBS (Curvas e superfícies), 1 = Analítico (Geometria analítica)
+
+    ' Também é possível configurar o tipo de superfície:
+      oOptions.Value("SurfaceType") = 1
+    ' 0 = 143(Bounded), 1 = 144(Trimmed)
+    
+    ' Definir o tipo de mecanismo de I/O (entrada e saída de arquivos).
+    oContext.Type = IOMechanismEnum.kFileBrowseIOMechanism
+
+    ' Criar um objeto para armazenar os dados de saída.
+    Dim oData As DataMedium = ThisApplication.TransientObjects.CreateDataMedium
+    
+    
+
+    ' Salvar a cópia do documento ativo no formato IGES no local especificado.
+    Call oIGESTranslator.SaveCopyAs(ThisApplication.ActiveDocument, oContext, oOptions, oData)
+End If

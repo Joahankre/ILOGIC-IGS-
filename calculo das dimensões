@@ -1,0 +1,79 @@
+' Ignora qualquer erro durante a execução do código, passando para a próxima linha em caso de erro.
+On Error Resume Next
+
+' Declara a variável oDoc como um documento de peça (PartDocument).
+Dim oDoc As PartDocument
+oDoc = ThisApplication.ActiveDocument  ' Obtém o documento ativo no Inventor.
+
+' Declara e inicializa a variável CadlineSheetMetal como a definição de componente de chapa metálica (SheetMetalComponentDefinition).
+Dim CadlineSheetMetal As SheetMetalComponentDefinition
+CadlineSheetMetal = oDoc.ComponentDefinition  ' Atribui a definição de componente de chapa metálica ao objeto.
+
+' Deleta o padrão plano (FlatPattern) da chapa metálica.
+CadlineSheetMetal.FlatPattern.Delete  ' Exclui o padrão plano, caso exista.
+
+' Desdobra a chapa metálica.
+CadlineSheetMetal.Unfold  ' Desfaz a dobra da chapa metálica para obter a forma plana.
+
+' Atribui a variável Cadline à definição de componente do documento ativo.
+Cadline = ThisApplication.ActiveDocument.ComponentDefinition
+
+' Calcula as dimensões do componente com base na caixa de limites (RangeBox).
+' O valor é multiplicado por 10 para converter unidades (possivelmente de milímetros para centímetros ou outra unidade desejada).
+X = 10 * (Cadline.RangeBox.MaxPoint.X - Cadline.RangeBox.MinPoint.X)  ' Calcula a largura (diferença entre o ponto máximo e mínimo em X).
+Y = 10 * (Cadline.RangeBox.MaxPoint.Y - Cadline.RangeBox.MinPoint.Y)  ' Calcula a altura (diferença entre o ponto máximo e mínimo em Y).
+Z = 10 * (Cadline.RangeBox.MaxPoint.Z - Cadline.RangeBox.MinPoint.Z)  ' Calcula a profundidade (diferença entre o ponto máximo e mínimo em Z).
+
+' Configura a opção para impedir a exibição de mensagens de erro durante a execução do código.
+Parameter.Quiet = True
+
+' Calcula a espessura (THICKNESS) como o valor mínimo entre as três dimensões X, Y e Z.
+THICKNESS = MinOfMany(X, Y, Z)
+
+' Calcula o comprimento (LENGTH) como o valor máximo entre as três dimensões X, Y e Z.
+LENGTH = MaxOfMany(X, Y, Z)
+
+' Se a dimensão X for menor que o comprimento (LENGTH), define a largura (WIDTH) como o valor de X.
+If X < LENGTH Then
+    WIDTH = X
+End If
+
+' Se a dimensão Y for menor que o comprimento (LENGTH), define a largura (WIDTH) como o valor de Y.
+If Y < LENGTH Then
+    WIDTH = Y
+End If
+
+' Se a dimensão Z for menor que o comprimento (LENGTH), define a largura (WIDTH) como o valor de Y.
+If Z < LENGTH Then
+    WIDTH = Y
+End If
+
+' A linha abaixo (comentada) estaria ajustando a propriedade iProperties para o comprimento (LENGTH) arredondado para 1 casa decimal.
+'iProperties.Value("Custom", "LENGTH") = Round(LENGTH, 1)
+
+' A linha abaixo (comentada) estaria ajustando a propriedade iProperties para a largura (WIDTH) arredondada para 1 casa decimal.
+'iProperties.Value("Custom", "WIDTH") = Round(WIDTH, 1)
+
+' Ajusta a propriedade iProperties para a espessura (THICKNESS) arredondada para 1 casa decimal.
+iProperties.Value("Custom", "THICKNESS") = Round(THICKNESS, 1)
+
+' As linhas abaixo (comentadas) seriam responsáveis por ajustar as propriedades dos parâmetros de comprimento, largura e espessura diretamente.
+'Parameter("Length") = Round(LENGTH, 1)
+'Parameter("Width_OD") = Round(WIDTH, 1)
+'Parameter("Thickness_ID") = Round(THICKNESS, 1)
+
+' Chama a função RuleParametersOutput() (não está definida no código) para processar ou atualizar os parâmetros.
+RuleParametersOutput()
+
+' A linha abaixo garante que as atualizações feitas no código sejam aplicadas após a execução.
+iLogicVb.UpdateWhenDone = True
+
+' Atualiza o documento ativo no Inventor.
+oDoc = ThisApplication.ActiveDocument
+CadlineSheetMetal = oDoc.ComponentDefinition
+
+' Atualiza o documento do Inventor com as alterações feitas.
+InventorVb.DocumentUpdate()
+
+' Salva o documento no Inventor.
+ThisDoc.Save  ' Aqui está a correção para a função de salvar o documento.

@@ -15,7 +15,7 @@ If String.IsNullOrEmpty(prefixo) Then
 End If
 
 ' Caminho do diretório onde os arquivos IGES serão salvos
-Dim outputFolder As String = "O:\Doma Projetos\01 - PROJETOS\02 - CLIENTES\FADEL - SAN JOSÉ-AR\03 - SR84-REV3\00 - DETALHAMENTO\XX - IDW\1 - PDF-DXF-IPN-DWG\IGS"  ' Altere para o diretório desejado
+Dim outputFolder As String = "C:\Users\PC\Desktop\Nova pasta (4)"  ' Altere para o diretório desejado
 
 ' Verificar se o diretório existe
 If Not System.IO.Directory.Exists(outputFolder) Then
@@ -115,24 +115,24 @@ For Each drawSheet As Sheet In oDoc.Sheets
                         Dim igesFileName As String = outputFolder & "\" & prefixo & "-" & formattedPageNumber & "-" & tubeDimensions & "-" & formattedQtde & ".igs"
                         
                         ' Criar o contexto de tradução e arquivo de saída
-                        oContext.Type = kFileBrowseIOMechanism
+                        oContext.Type = IOMechanismEnum.kFileBrowseIOMechanism
                         Dim oData As DataMedium = ThisApplication.TransientObjects.CreateDataMedium
                         oData.FileName = igesFileName
 
-                        ' Definir as opções do tradutor IGES
+                        ' Verificar se há opções para salvar uma cópia do arquivo IGES
                         If oIGESTranslator.HasSaveCopyAsOptions(oModel, oContext, oOptions) Then
-                            oOptions.Value("GeometryType") = 0 ' Superfícies
-                            oOptions.Value("SurfaceType") = 144  ' Superfícies "Trimmed"
-                            oOptions.Value("SolidFaceType") = 0 ' NURBS
-                            oOptions.Value("SplineFitAccuracy") = 0.010 ' Precisão de 0,010 mm
-                            oOptions.Value("EBIncludeSketches") = True ' Incluir esboços na exportação
+                            ' Configurar o tipo de geometria para o wireframe (modelo de linhas e vértices)
+                            ' 0 = Superfícies, 1 = Sólidos, 2 = Wireframe (Modelo de linhas e vértices)
+                            oOptions.Value("GeometryType") = 0  ' Definir o tipo de geometria como superfícies
 
-                            ' Tenta salvar o arquivo IGES com as opções definidas
-                            Try
-                                oIGESTranslator.SaveCopyAs(oModel, oContext, oOptions, oData)
-                            Catch ex As Exception
-                                ' Caso ocorra erro, ignora e continua o processo (sem mensagem)
-                            End Try
+                            ' Configurar o tipo de face do sólido
+                            oOptions.Value("SolidFaceType") = 0  ' 0 = NURBS (Curvas e superfícies), 1 = Analítico (Geometria analítica)
+
+                            ' Configurar o tipo de superfície
+                            oOptions.Value("SurfaceType") = 1  ' 0 = 143(Bounded), 1 = 144(Trimmed)
+
+                            ' Realizar a tradução e salvar a cópia do arquivo IGES
+                            oIGESTranslator.SaveCopyAs(oModel, oContext, oOptions, oData)
                         End If
                     End If
                 End If

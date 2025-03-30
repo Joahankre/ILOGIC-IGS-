@@ -1,0 +1,146 @@
+' Obter o documento de desenho ativo
+Dim oDoc As DrawingDocument = ThisApplication.ActiveDocument
+
+' Verificar se o documento é um desenho
+If oDoc.DocumentType <> DocumentTypeEnum.kDrawingDocumentObject Then
+    Return
+End If
+
+' Exibir uma caixa de entrada para o prefixo do nome do arquivo
+Dim prefixo As String = InputBox("Insira o prefixo para o nome do arquivo IGES:", "Inserir Prefixo")
+
+' Verificar se o prefixo não está vazio
+If String.IsNullOrEmpty(prefixo) Then
+    Return
+End If
+
+' Caminho do diretório onde os arquivos IGES serão salvos
+Dim outputFolder As String = "C:\Users\PC\Desktop\Nova pasta (4)"  ' Altere para o diretório desejado
+
+' Verificar se o diretório existe
+If Not System.IO.Directory.Exists(outputFolder) Then
+    ' Criar o diretório caso não exista
+    System.IO.Directory.CreateDirectory(outputFolder)
+End If
+
+' Obter o tradutor IGES
+Dim oIGESTranslator As TranslatorAddIn = ThisApplication.ApplicationAddIns.ItemById("{90AF7F44-0C01-11D5-8E83-0010B541CD80}")
+
+If oIGESTranslator Is Nothing Then
+    Return
+End If
+
+' Criar contexto de tradução e mapa de opções
+Dim oContext As TranslationContext = ThisApplication.TransientObjects.CreateTranslationContext
+Dim oOptions As NameValueMap = ThisApplication.TransientObjects.CreateNameValueMap
+
+' Iterar sobre todas as folhas do desenho
+For Each drawSheet As Sheet In oDoc.Sheets
+    ' Iterar sobre todas as vistas de desenho nas folhas
+    For Each drawingView As DrawingView In drawSheet.DrawingViews
+        ' Verificar se o DrawingView tem um documento de modelo associado
+        If drawingView.ReferencedDocumentDescriptor IsNot Nothing Then
+            Dim oModel As Document = drawingView.ReferencedDocumentDescriptor.ReferencedDocument
+            If oModel IsNot Nothing Then
+                ' Verificar se o modelo é uma peça (IPT) e foi criado com o Frame Generator
+                If oModel.DocumentType = DocumentTypeEnum.kPartDocumentObject Then
+                    ' A peça foi criada com o Frame Generator
+                    If oModel.DocumentInterests.HasInterest("{AC211AE0-A7A5-4589-916D-81C529DA6D17}") Then
+                        ' Continue o processo sem exibir a caixa de diálogo
+                        ' Captura o número da página da folha e formata como 3 dígitos
+                        Dim sheetName As String = drawSheet.Name
+                        Dim pageNumber As String = sheetName.Substring(sheetName.LastIndexOf(":") + 1)
+                        Dim formattedPageNumber As String = ""
+
+                        If pageNumber.Length <= 3 Then
+                            formattedPageNumber = pageNumber.PadLeft(3, "0"c)  ' Formata números de 1 a 9 como 001, 002, etc.
+                        Else
+                            formattedPageNumber = pageNumber ' Mantém números de centenas como estão
+                        End If
+
+                        ' Extrair dimensões do tubo da descrição do arquivo (em vez do nome do arquivo)
+                        Dim dimensionPattern As String = "(\d+)\s*x\s*(\d+)\s*x\s*(\d+(\,\d+)?)"  ' Expressão regular para capturar as dimensões
+                        Dim tubeDimensions As String = ""
+
+                        Try
+                            ' Acessar a descrição do modelo, que pode conter as dimensões
+                            Dim description As String = oModel.PropertySets.Item("Design Tracking Properties").Item("Description").Value.ToString()
+
+                            ' Aplicar a expressão regular na descrição para encontrar as dimensões
+                            Dim regex As New System.Text.RegularExpressions.Regex(dimensionPattern)
+                            Dim match As System.Text.RegularExpressions.Match = regex.Match(description)
+
+                            If match.Success Then
+                                ' Extrai as dimensões encontradas e formata conforme necessário
+                                Dim dimension1 As String = match.Groups(1).Value
+                                Dim dimension2 As String = match.Groups(2).Value
+                                Dim dimension3 As String = match.Groups(3).Value.Replace(",", ".")  ' Substitui vírgula por ponto para converter em número
+
+                                ' Converte a terceira dimensão para inteiro (removendo decimal, se presente)
+                                ' Trata a parte decimal corretamente para gerar a formatação correta
+                                Dim intDimension3 As Integer
+
+                                ' Verifica se a dimensão3 é um número decimal
+                                If dimension3.Contains(".") Then
+                                    ' Se for decimal, apenas converte para 2 dígitos (sem multiplicar por 10)
+                                    intDimension3 = Convert.ToInt32(Math.Round(Convert.ToDouble(dimension3)))  ' Round para garantir que o valor seja arredondado
+                                Else
+                                    ' Caso contrário, usa a dimensão original multiplicada por 10
+                                    intDimension3 = Convert.ToInt32(dimension3) * 10
+                                End If
+
+                                ' Garante que a espessura tenha dois dígitos (para o caso de ser inteiro)
+                                Dim formattedDimension3 As String = intDimension3.ToString("D2")  ' Garante que tenha 2 dígitos
+
+                                ' Monta a string final para as dimensões
+                                tubeDimensions = dimension1 & dimension2 & formattedDimension3
+                            End If
+                        Catch ex As Exception
+                            ' Caso ocorra erro ao acessar a descrição, define um valor padrão
+                            tubeDimensions = "000000"  ' Valor padrão caso não consiga acessar ou encontrar as dimensões
+                        End Try
+
+                        ' Acessar e formatar a quantidade personalizada
+                        Dim qtdePersonalizada As String = ""
+                        Try
+                            qtdePersonalizada = oModel.PropertySets.Item("User Defined Properties").Item("QTDE PERSONALIZADA").Value.ToString()
+                        Catch ex As Exception
+                            qtdePersonalizada = "001"  ' Caso não haja valor para QTDE, usa 001 por padrão
+                        End Try
+
+                        ' Formatar a quantidade com o sufixo "X" e garantir que tenha 3 dígitos
+                        Dim formattedQtde As String = qtdePersonalizada.PadLeft(3, "0"c) & "X"
+
+                        ' Formatando o nome do arquivo conforme as instruções
+                        Dim igesFileName As String = outputFolder & "\" & prefixo & "-" & formattedPageNumber & "-" & tubeDimensions & "-" & formattedQtde & ".igs"
+                        
+                        ' Criar o contexto de tradução e arquivo de saída
+                        oContext.Type = IOMechanismEnum.kFileBrowseIOMechanism
+                        Dim oData As DataMedium = ThisApplication.TransientObjects.CreateDataMedium
+                        oData.FileName = igesFileName
+
+                        ' Verificar se há opções para salvar uma cópia do arquivo IGES
+                        If oIGESTranslator.HasSaveCopyAsOptions(oModel, oContext, oOptions) Then
+                            ' Configurar o tipo de geometria para superfícies (0)
+                            oOptions.Value("GeometryType") = 0  ' Superfícies
+
+                            ' Configurar o tipo de face do sólido (0 para NURBS)
+                            oOptions.Value("SolidFaceType") = 0  ' 0 = NURBS
+
+                            ' Configurar o tipo de superfície (1 para Trimmed)
+                            oOptions.Value("SurfaceType") = 1  ' 0 = 143(Bounded), 1 = 144(Trimmed)
+
+                            ' Realizar a tradução e salvar a cópia do arquivo IGES
+                            Try
+                                oIGESTranslator.SaveCopyAs(oModel, oContext, oOptions, oData)
+                                MsgBox("Arquivo IGES gerado com sucesso: " & igesFileName)
+                            Catch ex As Exception
+                                MsgBox("Erro ao salvar o arquivo IGES: " & ex.Message)
+                            End Try
+                        End If
+                    End If
+                End If
+            End If
+        End If
+    Next
+Next

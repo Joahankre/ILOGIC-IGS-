@@ -130,6 +130,12 @@ For Each drawSheet As Sheet In oDoc.Sheets
                             ' Configurar o tipo de superfície (1 para Trimmed)
                             oOptions.Value("SurfaceType") = 1  ' 0 = 143(Bounded), 1 = 144(Trimmed)
 
+                            ' Configurar Spline Fit Accuracy (precisão de ajuste de splines)
+                            oOptions.Value("SplineFitAccuracy") = 0.001 ' Ajuste de precisão, valor padrão
+
+                            ' Configurar para incluir esboços (sketches)
+                            oOptions.Value("IncludeSketches") = True ' Incluir esboços no arquivo IGES
+
                             ' Realizar a tradução e salvar a cópia do arquivo IGES
                             Try
                                 oIGESTranslator.SaveCopyAs(oModel, oContext, oOptions, oData)

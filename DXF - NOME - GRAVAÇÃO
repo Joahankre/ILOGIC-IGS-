@@ -1,0 +1,123 @@
+Sub Main()
+    ' Definir o caminho da pasta onde estão os arquivos DXF
+    Dim folderPath As String = "C:\Users\PC\Desktop\Nova pasta"  ' Substitua pelo caminho correto da pasta
+
+    ' Solicitar ao usuário o tamanho do texto
+    Dim textLength As Integer = GetTextLengthFromUser()
+
+    ' Chamar a função para editar os arquivos DXF na pasta
+    EditDXFFolderProperties(folderPath, textLength)
+End Sub
+
+' Função para editar os arquivos DXF em uma pasta
+Public Sub EditDXFFolderProperties(folderPath As String, textLength As Integer)
+    Try
+        ' Verificar se a pasta existe
+        If System.IO.Directory.Exists(folderPath) Then
+            ' Obter todos os arquivos DXF na pasta
+            Dim dxfFiles As String() = System.IO.Directory.GetFiles(folderPath, "*.dxf")
+
+            ' Verificar se há arquivos DXF na pasta
+            If dxfFiles.Length > 0 Then
+                For Each dxfFile As String In dxfFiles
+                    ' Obter o nome do arquivo DXF (sem o caminho completo)
+                    Dim fileName As String = System.IO.Path.GetFileName(dxfFile)
+
+                    ' Para cada arquivo DXF, editar o arquivo inserindo o nome do arquivo
+                    EditDXFFile(fileName, 0, 0, dxfFile, "1D5", textLength) ' Alterar PosX e PosY conforme necessário
+                Next
+                MessageBox.Show("Nomes dos arquivos adicionados a todos os arquivos DXF na pasta.", "Sucesso", MessageBoxButtons.OK, MessageBoxIcon.Information)
+            Else
+                MessageBox.Show("Nenhum arquivo DXF encontrado na pasta.", "Erro", MessageBoxButtons.OK, MessageBoxIcon.Error)
+            End If
+        Else
+            MessageBox.Show("A pasta especificada não existe.", "Erro", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End If
+    Catch ex As Exception
+        MessageBox.Show("Erro ao processar os arquivos DXF: " & ex.Message, "Erro", MessageBoxButtons.OK, MessageBoxIcon.Error)
+    End Try
+End Sub
+
+' Função para editar o arquivo DXF
+Public Sub EditDXFFile(TextToAdd As String, PosX As Double, PosY As Double, FileName As String, IDnumber As String, textLength As Integer)
+    Try
+        ' Definir o formato do texto a ser adicionado ao DXF
+        Dim RequiredText As String = "TEXT" _
+            & vbNewLine & "  5" _
+            & vbNewLine & IDnumber _
+            & vbNewLine & "330" _
+            & vbNewLine & "71" _
+            & vbNewLine & "100" _
+            & vbNewLine & "AcDbEntity" _
+            & vbNewLine & "  8" _
+            & vbNewLine & "0" _
+            & vbNewLine & "100" _
+            & vbNewLine & "AcDbText" _
+            & vbNewLine & " 10" _
+            & vbNewLine & PosX _
+            & vbNewLine & " 20" _
+            & vbNewLine & PosY _
+            & vbNewLine & " 30" _
+            & vbNewLine & "0.0" _
+            & vbNewLine & " 40" _
+            & vbNewLine & "3.55" _ ' Tamanho do texto
+            & vbNewLine & "  1" _
+            & vbNewLine
+
+        ' Ajustar o comprimento do texto inserido
+        TextToAdd = TextToAdd.PadRight(textLength).Substring(0, textLength)
+
+        ' Adicionar o nome do arquivo DXF ao texto
+        Dim realTextToAdd As String = RequiredText & TextToAdd _
+            & vbNewLine & "100" _
+            & vbNewLine & "AcDbText" _
+            & vbNewLine & "0" _
+            & vbNewLine
+
+        ' Ler o conteúdo do arquivo DXF
+        If System.IO.File.Exists(FileName) Then
+            ' Abrir o arquivo DXF
+            Dim readText As String = System.IO.File.ReadAllText(FileName)
+
+            ' Verificar se o nome do arquivo já foi adicionado
+            If Not readText.Contains(TextToAdd) Then
+                ' Localizar a seção "ENTITIES" para inserir o texto
+                Dim re As New System.Text.RegularExpressions.Regex("(?<=ENTITIES((?!ENDSEC).)*)ENDSEC", System.Text.RegularExpressions.RegexOptions.Singleline)
+                Dim i As Integer = 0
+
+                ' Inserir o texto no arquivo DXF
+                For Each match In re.Matches(readText)
+                    readText = readText.Insert(match.Index + realTextToAdd.Length * i, realTextToAdd)
+                    i += 1
+                Next
+
+                ' Escrever o texto modificado de volta ao arquivo DXF
+                System.IO.File.WriteAllText(FileName, readText)
+            Else
+                ' Se o nome do arquivo já foi inserido, não faz nada
+                MessageBox.Show("O nome do arquivo já foi inserido no DXF.", "Aviso", MessageBoxButtons.OK, MessageBoxIcon.Information)
+            End If
+        Else
+            ' Se o arquivo DXF não existir, lançar uma exceção
+            Throw New System.IO.FileNotFoundException("Arquivo DXF não encontrado: " & FileName)
+        End If
+    Catch ex As Exception
+        ' Exibir mensagem de erro em caso de falha ao editar o arquivo DXF
+        MessageBox.Show("Erro ao editar o arquivo DXF: " & ex.Message, "Erro", MessageBoxButtons.OK, MessageBoxIcon.Error)
+    End Try
+End Sub
+
+' Função para solicitar o tamanho do texto
+Public Function GetTextLengthFromUser() As Integer
+    ' Mostrar caixa de entrada para o usuário inserir o tamanho
+    Dim input As String = InputBox("Digite o tamanho do texto em caracteres:", "Tamanho do Texto", "20")
+
+    ' Verificar se o valor é um número inteiro válido
+    Dim textLength As Integer
+    If Integer.TryParse(input, textLength) AndAlso textLength > 0 Then
+        Return textLength
+    Else
+        MessageBox.Show("Por favor, insira um número válido maior que 0.", "Erro", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        Return GetTextLengthFromUser() ' Chama novamente caso o valor não seja válido
+    End If
+End Function

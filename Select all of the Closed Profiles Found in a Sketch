@@ -1,0 +1,57 @@
+Se Typeof ThisApplication .ActiveEditObject for Sketch , então
+Não faça nada
+Outro
+MessageBox . Show ( "Ative um Sketch primeiro e depois execute esta regra" , "ilogic" )
+Retornar
+Fim Se
+
+Dim oPartDoc como PartDocument
+oPartDoc = EsteAplicativo.ActiveDocument​
+
+Dim oCompDef como PartComponentDefinition
+oCompDef = oPartDoc.ComponentDefinition
+
+Dim oSketch como PlanarSketch
+oSketch = EsteAplicativo .ActiveEditObject
+
+' Crie um perfil.
+Dim oProfile como perfil
+Em caso de erro, vá para NoProfile
+oProfile = oSketch.Profiles.AddForSolid
+
+'obter entrada do usuário
+oDistance = InputBox ( "Digite a distância de extrusão" , "iLogic" , "10 mm" )
+oDirection  = InputRadioBox ( "Selecionar direção de extrusão" , "Para cima (+)" , "Para baixo (-)" , True, Title := "iLogic" )
+oJoinOrCut  = InputRadioBox ( "Selecionar solução de extrusão" , "Unir" , "Cortar" , True, Title := "iLogic" )
+
+Se oDirection = True então
+oDireção = kDireçãoExtensãoPositiva
+Outro
+oDireção = kDireçãoExtensãoNegativa
+Fim se
+
+Se oJoinOrCut = True então
+oJoinOrCut = kOperaçãoJoin
+Outro
+oJoinOrCut = kOperaçãoCorte
+Fim se
+
+' Crie uma extrusão
+Dim oExtrude como recurso de extrusão
+Em caso de erro, vá para NoExtrude
+oExtrude = oCompDef.Features.ExtrudeFeatures.AddByDistanceExtent ( _
+oProfile , oDistance , oDirection , oJoinOrCut )
+
+Este aplicativo .CommandManager.ControlDefinitions.Item ( "FinishSketch" ) .Execute
+
+iLogicVb.UpdateWhenDone = Verdadeiro
+
+sair do sub
+
+Sem perfil:
+MessageBox . Mostrar ( "Nenhum perfil fechado encontrado" , "iLogic" )
+Retornar
+
+Sem Extrusão:
+MessageBox . Show ( "Nenhuma extrusão criada, verifique suas entradas." , "iLogic" )
+Retornar

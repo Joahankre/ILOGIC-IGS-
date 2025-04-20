@@ -1,0 +1,38 @@
+' Nome da propriedade personalizada
+Dim nomePropriedade As String = "Processo"
+
+' Lista de opções
+Dim opcoesProcesso As New List(Of String) From {
+    "00 - PR - PRODUCAO",
+    "01 - MO - MONTAGEM",
+    "02 - CT - CORTE TUBO",
+    "03 - SF - SERRA FITA",
+    "04 - LA - LASER",
+    "05 - LD - LASER DOBRA",
+    "06 - AL - USINAGEM ALUMINIO GERAL LIGA",
+    "06 - AF - USINAGEM ALUMINIO EXTERNO FRIMEC",
+    "06 - AW - USINAGEM ALUMINIO EXTERNO WELD VISION",
+    "07 - PV - USINAGEM PLASTICO EXTERNO VINTER",
+    "07 - PF - USINAGEM PLASTICO EXTERNO FRIMEC",
+    "08 - PO - USINAGEM POLICARBONATO EXTERNO",
+    "09 - US - USINAGEM LIGA",
+    "09 - UF - USINAGEM INOX EXTERNO NA FRIMEC",
+    "10 - CO - COMERCIAL",
+    "11 - CS - COMERCIAL SERRA FITA"
+}
+
+' Valor atual (se existir)
+Dim valorAtual As String = ""
+Try
+    valorAtual = iProperties.Value("Custom", nomePropriedade)
+Catch
+    iProperties.Value("Custom", nomePropriedade) = ""
+End Try
+
+' Caixa de seleção
+Dim processoSelecionado As String = InputListBox("Selecione o processo:", opcoesProcesso, valorAtual, "Definir Processo", "Processo da Peça")
+
+' Atribui à propriedade personalizada
+If Not String.IsNullOrEmpty(processoSelecionado) Then
+    iProperties.Value("Custom", nomePropriedade) = processoSelecionado
+End If

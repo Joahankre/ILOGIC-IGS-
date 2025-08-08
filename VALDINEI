@@ -1,0 +1,55 @@
+Dim oDoc As DrawingDocument = ThisApplication.ActiveDocument
+
+' Obter o total de vistas para definir o número de passos da barra de progresso
+Dim totalViews As Integer = 0
+For Each oSheet As Sheet In oDoc.Sheets
+    totalViews += oSheet.DrawingViews.Count
+Next
+
+' Número total de passos: salvar inicial + atualizar cada vista + atualizar documento + salvar final
+Dim oProgressSteps As Integer = totalViews + 3
+Dim oProgressStep As Integer = 1
+Dim oProgressBar As Inventor.ProgressBar
+Dim oProgressStaticText As String = "Processando: Etapa "
+
+oProgressBar = ThisApplication.CreateProgressBar(False, oProgressSteps, "iLogic - Atualizar Vistas")
+oProgressBar.Message = oProgressStaticText & oProgressStep & " de " & oProgressSteps
+oProgressBar.UpdateProgress
+
+' Etapa 1: Salvar antes de iniciar
+oDoc.Save
+oProgressStep += 1
+oProgressBar.Message = oProgressStaticText & oProgressStep & " de " & oProgressSteps
+oProgressBar.UpdateProgress
+
+' Etapas 2 a N: Tornar vistas precisas
+For Each oSheet As Sheet In oDoc.Sheets
+    For Each oView As DrawingView In oSheet.DrawingViews
+        Try
+            oView.Precision = 2 ' 2 = Alta precisão
+        Catch
+            ' Ignorar se a vista não suportar a propriedade Precision
+        End Try
+        oProgressStep += 1
+        oProgressBar.Message = oProgressStaticText & oProgressStep & " de " & oProgressSteps
+        oProgressBar.UpdateProgress
+    Next
+Next
+
+' Atualizar o documento
+oDoc.Update
+oProgressStep += 1
+oProgressBar.Message = oProgressStaticText & oProgressStep & " de " & oProgressSteps
+oProgressBar.UpdateProgress
+
+' Salvar novamente após as alterações
+oDoc.Save
+oProgressStep += 1
+oProgressBar.Message = oProgressStaticText & oProgressStep & " de " & oProgressSteps
+oProgressBar.UpdateProgress
+
+' Fechar barra de progresso
+oProgressBar.Close
+
+' Opcional: Mensagem final ao usuário
+MessageBox.Show("Todas as vistas foram tornadas precisas, o documento foi atualizado e salvo com sucesso.", "iLogic Finalizado", MessageBoxButtons.OK, MessageBoxIcon.Information)
